@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base theme. Compose takes over visuals; this only styles the window chrome. -->
+    <style name="Theme.ORION" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/orion_deep_space</item>
+        <item name="android:statusBarColor">@color/orion_deep_space</item>
+        <item name="android:navigationBarColor">@color/orion_deep_space</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
