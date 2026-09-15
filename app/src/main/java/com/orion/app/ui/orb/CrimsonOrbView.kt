@@ -243,40 +243,30 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 vec3 V = normalize(-vWorldPos);
                 float facing = max(dot(N, V), 0.0);
 
-                // Sharp silhouette rim glow
-                float rim = pow(1.0 - facing, 3.0);
+                // Silhouette rim glow (strong at edges)
+                float rim = pow(1.0 - facing, 3.5);
 
-                // Tight hot core
-                float core = pow(facing, 26.0);
+                // Tiny hot core (only at very center)
+                float core = pow(facing, 30.0);
 
-                // Fine wispy plasma
-                float n1 = fbm(N * 5.5 + vec3(0.0, uTime * 0.13, 0.0));
-                float n2 = fbm(N * 10.0 - vec3(uTime * 0.20, 0.0, uTime * 0.11));
-                float plasma = smoothstep(0.20, 0.85, n1 * 0.55 + n2 * 0.45);
+                // Base body — dark at edges, accent toward camera
+                vec3 color = uAccent * (0.18 + 0.72 * facing);
 
-                // Deep dark edges → full accent toward camera
-                vec3 deepCol   = uAccent * 0.10;
-                vec3 bodyCol   = uAccent * 1.05;
-                vec3 plasmaCol = uAccent * 1.85 + vec3(0.10);
+                // Plasma modulation (brightness only, keeps hue)
+                float plasma = smoothstep(0.25, 0.75, fbm(N * 4.5 + vec3(0.0, uTime * 0.15, 0.0)));
+                color *= mix(0.85, 1.15, plasma);
 
-                vec3 color = mix(deepCol, bodyCol, pow(facing, 1.4));
-                color = mix(color, plasmaCol, plasma * 0.65);
+                // Rim — accent-colored, adds saturation at edge
+                color += uAccent * rim * 1.0;
 
-                // Bright silhouette rim
-                color += uAccent * rim * 3.2;
-
-                // Tiny white-hot core
-                color += vec3(1.0, 0.98, 0.95) * core * 1.2;
+                // Tiny hot core — small white dot, doesn't wash whole sphere
+                color += vec3(1.0, 0.97, 0.92) * core * 0.35;
 
                 // Breathing
-                float breath = 0.94 + 0.06 * sin(uTime * 2.0);
-                color *= breath * (0.90 + uEnergy * 0.35);
+                color *= 0.94 + 0.06 * sin(uTime * 2.0);
 
-                // NO tone map — preserve saturation
-                color = clamp(color, 0.0, 1.0);
-                color = pow(color, vec3(0.88));
-
-                gl_FragColor = vec4(color, 1.0);
+                // Clamp — no tone map, so accent hue survives
+                gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
             }
         """
     }
