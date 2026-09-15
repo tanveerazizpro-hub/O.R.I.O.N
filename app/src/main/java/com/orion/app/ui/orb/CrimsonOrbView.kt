@@ -77,7 +77,7 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
         uAccent = GLES20.glGetUniformLocation(program, "uAccent")
         uEnergy = GLES20.glGetUniformLocation(program, "uEnergy")
 
-        buildSphere(segments = 40, rings = 24)
+        buildSphere(40, 24)
 
         startNanos = System.nanoTime()
         lastFrameNanos = startNanos
@@ -94,7 +94,6 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
         val now = System.nanoTime()
         if (now - lastFrameNanos < minFrameInterval) return
         lastFrameNanos = now
-
         val t = (now - startNanos) / 1_000_000_000f
 
         GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT or GLES20.GL_DEPTH_BUFFER_BIT)
@@ -143,8 +142,8 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 val nx = sin(phi) * cos(theta)
                 val ny = cos(phi)
                 val nz = sin(phi) * sin(theta)
-                vertices[vi] = nx; vertices[vi + 1] = ny; vertices[vi + 2] = nz
-                normals[vi] = nx;  normals[vi + 1] = ny;  normals[vi + 2] = nz
+                vertices[vi] = nx; vertices[vi+1] = ny; vertices[vi+2] = nz
+                normals[vi]  = nx; normals[vi+1]  = ny; normals[vi+2]  = nz
                 vi += 3
             }
         }
@@ -157,12 +156,8 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 val b = a + 1
                 val c = a + (segments + 1)
                 val d = c + 1
-                indices[ii++] = a.toShort()
-                indices[ii++] = c.toShort()
-                indices[ii++] = b.toShort()
-                indices[ii++] = b.toShort()
-                indices[ii++] = c.toShort()
-                indices[ii++] = d.toShort()
+                indices[ii++] = a.toShort(); indices[ii++] = c.toShort(); indices[ii++] = b.toShort()
+                indices[ii++] = b.toShort(); indices[ii++] = c.toShort(); indices[ii++] = d.toShort()
             }
         }
 
@@ -232,15 +227,15 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 vec3 f = fract(x);
                 f = f * f * (3.0 - 2.0 * f);
                 return mix(
-                    mix(mix(hash(i), hash(i + vec3(1.0,0.0,0.0)), f.x),
-                        mix(hash(i + vec3(0.0,1.0,0.0)), hash(i + vec3(1.0,1.0,0.0)), f.x), f.y),
-                    mix(mix(hash(i + vec3(0.0,0.0,1.0)), hash(i + vec3(1.0,0.0,1.0)), f.x),
-                        mix(hash(i + vec3(0.0,1.0,1.0)), hash(i + vec3(1.0,1.0,1.0)), f.x), f.y),
+                    mix(mix(hash(i), hash(i + vec3(1,0,0)), f.x),
+                        mix(hash(i + vec3(0,1,0)), hash(i + vec3(1,1,0)), f.x), f.y),
+                    mix(mix(hash(i + vec3(0,0,1)), hash(i + vec3(1,0,1)), f.x),
+                        mix(hash(i + vec3(0,1,1)), hash(i + vec3(1,1,1)), f.x), f.y),
                     f.z);
             }
 
             float fbm(vec3 p) {
-                return 0.55 * noise(p) + 0.28 * noise(p * 2.03) + 0.17 * noise(p * 4.11);
+                return 0.55 * noise(p) + 0.28 * noise(p * 2.07) + 0.17 * noise(p * 4.13);
             }
 
             void main() {
@@ -248,42 +243,38 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 vec3 V = normalize(-vWorldPos);
                 float facing = max(dot(N, V), 0.0);
 
-                // Very tight hot core spot
-                float core = pow(facing, 14.0);
-                // Bright rim on the silhouette
-                float rim  = pow(1.0 - facing, 2.4);
+                // Sharp silhouette rim glow
+                float rim = pow(1.0 - facing, 3.0);
 
-                // Two plasma layers
-                float n1 = fbm(N * 2.8 + vec3(0.0, uTime * 0.10, uTime * 0.04));
-                float n2 = fbm(N * 6.2 - vec3(uTime * 0.14, 0.0, uTime * 0.08));
-                float plasma = n1 * 0.6 + n2 * 0.4;
-                plasma = smoothstep(0.15, 0.88, plasma);
+                // Tight hot core
+                float core = pow(facing, 26.0);
 
-                vec3 deepCol   = uAccent * 0.08;
-                vec3 bodyCol   = uAccent * 0.75;
-                vec3 brightCol = uAccent * 1.35;
+                // Fine wispy plasma
+                float n1 = fbm(N * 5.5 + vec3(0.0, uTime * 0.13, 0.0));
+                float n2 = fbm(N * 10.0 - vec3(uTime * 0.20, 0.0, uTime * 0.11));
+                float plasma = smoothstep(0.20, 0.85, n1 * 0.55 + n2 * 0.45);
 
-                // 1. Base: dark at edges → body color toward camera
-                vec3 color = mix(deepCol, bodyCol, pow(facing, 1.5));
+                // Deep dark edges → full accent toward camera
+                vec3 deepCol   = uAccent * 0.10;
+                vec3 bodyCol   = uAccent * 1.05;
+                vec3 plasmaCol = uAccent * 1.85 + vec3(0.10);
 
-                // 2. Plasma: mix (not add) so it never overwhelms
-                color = mix(color, brightCol, plasma * 0.75);
+                vec3 color = mix(deepCol, bodyCol, pow(facing, 1.4));
+                color = mix(color, plasmaCol, plasma * 0.65);
 
-                // 3. Rim glow — added, but only at the silhouette
-                color += uAccent * rim * 1.7;
+                // Bright silhouette rim
+                color += uAccent * rim * 3.2;
 
-                // 4. Tiny hot core — small, subtle
-                color += vec3(1.0, 0.98, 0.95) * core * 0.35;
+                // Tiny white-hot core
+                color += vec3(1.0, 0.98, 0.95) * core * 1.2;
 
-                // 5. Breathing
-                float breath = 0.95 + 0.05 * sin(uTime * 2.0);
-                color *= breath * (0.9 + uEnergy * 0.25);
+                // Breathing
+                float breath = 0.94 + 0.06 * sin(uTime * 2.0);
+                color *= breath * (0.90 + uEnergy * 0.35);
 
-                // 6. Gentle tone map, keep hue
-                color = color / (1.0 + color * 0.55);
-
-                // 7. Slight gamma
-                color = pow(color, vec3(0.9));
+                // NO tone map — preserve saturation
+                color = clamp(color, 0.0, 1.0);
+                color = pow(color, vec3(0.88));
 
                 gl_FragColor = vec4(color, 1.0);
             }
