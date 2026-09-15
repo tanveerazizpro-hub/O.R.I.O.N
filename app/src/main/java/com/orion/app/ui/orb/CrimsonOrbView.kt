@@ -13,21 +13,6 @@ import javax.microedition.khronos.opengles.GL10
 import kotlin.math.cos
 import kotlin.math.sin
 
-/**
- * Cinematic 3D plasma orb (OpenGL ES 2.0).
- *
- * Layers (all inside the fragment shader):
- *  - Multi-octave plasma noise (organic, flows across the surface)
- *  - Blazing white-hot core
- *  - Strong fresnel rim so the silhouette reads as energy, not a ball
- *  - Time-based breathing
- *
- * Low-end optimization:
- *  - GLES 2.0 only
- *  - 30fps cap
- *  - 40x24 sphere (~1900 tris)
- *  - No textures, no lights, no external libraries
- */
 class CrimsonOrbView(context: Context) : GLSurfaceView(context) {
 
     private val orbRenderer = CinematicOrbRenderer()
@@ -102,12 +87,7 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
         GLES20.glViewport(0, 0, width, height)
         val aspect = width.toFloat() / height.toFloat()
         Matrix.perspectiveM(projMatrix, 0, 45f, aspect, 0.1f, 100f)
-        Matrix.setLookAtM(
-            viewMatrix, 0,
-            0f, 0f, 3.2f,
-            0f, 0f, 0f,
-            0f, 1f, 0f
-        )
+        Matrix.setLookAtM(viewMatrix, 0, 0f, 0f, 3.2f, 0f, 0f, 0f, 0f, 1f, 0f)
     }
 
     override fun onDrawFrame(gl: GL10?) {
@@ -142,12 +122,7 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
         GLES20.glEnableVertexAttribArray(aNormal)
 
         indexBuffer.position(0)
-        GLES20.glDrawElements(
-            GLES20.GL_TRIANGLES,
-            indexCount,
-            GLES20.GL_UNSIGNED_SHORT,
-            indexBuffer
-        )
+        GLES20.glDrawElements(GLES20.GL_TRIANGLES, indexCount, GLES20.GL_UNSIGNED_SHORT, indexBuffer)
 
         GLES20.glDisableVertexAttribArray(aPos)
         GLES20.glDisableVertexAttribArray(aNormal)
@@ -168,12 +143,8 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
                 val nx = sin(phi) * cos(theta)
                 val ny = cos(phi)
                 val nz = sin(phi) * sin(theta)
-                vertices[vi] = nx
-                vertices[vi + 1] = ny
-                vertices[vi + 2] = nz
-                normals[vi] = nx
-                normals[vi + 1] = ny
-                normals[vi + 2] = nz
+                vertices[vi] = nx; vertices[vi + 1] = ny; vertices[vi + 2] = nz
+                normals[vi] = nx;  normals[vi + 1] = ny;  normals[vi + 2] = nz
                 vi += 3
             }
         }
@@ -197,22 +168,14 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
 
         indexCount = indices.size
 
-        vertexBuffer = ByteBuffer
-            .allocateDirect(vertices.size * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
+        vertexBuffer = ByteBuffer.allocateDirect(vertices.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer()
             .apply { put(vertices); position(0) }
-
-        normalBuffer = ByteBuffer
-            .allocateDirect(normals.size * 4)
-            .order(ByteOrder.nativeOrder())
-            .asFloatBuffer()
+        normalBuffer = ByteBuffer.allocateDirect(normals.size * 4)
+            .order(ByteOrder.nativeOrder()).asFloatBuffer()
             .apply { put(normals); position(0) }
-
-        indexBuffer = ByteBuffer
-            .allocateDirect(indices.size * 2)
-            .order(ByteOrder.nativeOrder())
-            .asShortBuffer()
+        indexBuffer = ByteBuffer.allocateDirect(indices.size * 2)
+            .order(ByteOrder.nativeOrder()).asShortBuffer()
             .apply { put(indices); position(0) }
     }
 
@@ -249,14 +212,6 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
             }
         """
 
-        /**
-         * Plasma orb shader.
-         *
-         *  - Hot white core (pow on facing)
-         *  - Multi-octave plasma noise (fbm) that flows along the surface
-         *  - Strong fresnel rim (bright energy edge)
-         *  - Tone mapping to keep highlights hot without clipping
-         */
         private const val FRAGMENT_SHADER = """
             precision highp float;
 
@@ -266,84 +221,69 @@ private class CinematicOrbRenderer : GLSurfaceView.Renderer {
             varying vec3 vNormal;
             varying vec3 vWorldPos;
 
-            // 3D hash → pseudo-random float
             float hash(vec3 p) {
                 p = fract(p * vec3(0.1031, 0.1030, 0.0973));
                 p += dot(p, p.yzx + 33.33);
                 return fract((p.x + p.y) * p.z);
             }
 
-            // Smooth 3D value noise
             float noise(vec3 x) {
                 vec3 i = floor(x);
                 vec3 f = fract(x);
                 f = f * f * (3.0 - 2.0 * f);
                 return mix(
-                    mix(mix(hash(i + vec3(0.0,0.0,0.0)), hash(i + vec3(1.0,0.0,0.0)), f.x),
+                    mix(mix(hash(i), hash(i + vec3(1.0,0.0,0.0)), f.x),
                         mix(hash(i + vec3(0.0,1.0,0.0)), hash(i + vec3(1.0,1.0,0.0)), f.x), f.y),
                     mix(mix(hash(i + vec3(0.0,0.0,1.0)), hash(i + vec3(1.0,0.0,1.0)), f.x),
                         mix(hash(i + vec3(0.0,1.0,1.0)), hash(i + vec3(1.0,1.0,1.0)), f.x), f.y),
-                    f.z
-                );
+                    f.z);
             }
 
-            // Fractal Brownian Motion — 3 octaves of noise
             float fbm(vec3 p) {
-                float v = 0.0;
-                v += 0.500 * noise(p);
-                v += 0.250 * noise(p * 2.03);
-                v += 0.125 * noise(p * 4.07);
-                return v;
+                return 0.55 * noise(p) + 0.28 * noise(p * 2.03) + 0.17 * noise(p * 4.11);
             }
 
             void main() {
                 vec3 N = normalize(vNormal);
                 vec3 V = normalize(-vWorldPos);
-
-                // Facing: 1 at camera-facing center, 0 at silhouette edge
                 float facing = max(dot(N, V), 0.0);
 
-                // Bright fresnel rim
-                float rim = pow(1.0 - facing, 2.8);
+                // Very tight hot core spot
+                float core = pow(facing, 14.0);
+                // Bright rim on the silhouette
+                float rim  = pow(1.0 - facing, 2.4);
 
-                // Hot core
-                float core = pow(facing, 3.5);
+                // Two plasma layers
+                float n1 = fbm(N * 2.8 + vec3(0.0, uTime * 0.10, uTime * 0.04));
+                float n2 = fbm(N * 6.2 - vec3(uTime * 0.14, 0.0, uTime * 0.08));
+                float plasma = n1 * 0.6 + n2 * 0.4;
+                plasma = smoothstep(0.15, 0.88, plasma);
 
-                // Plasma texture — 3 layers at different scales and speeds
-                float n1 = fbm(N * 2.5 + vec3(0.0, uTime * 0.15, 0.0));
-                float n2 = fbm(N * 5.0 - vec3(uTime * 0.22, 0.0, uTime * 0.10));
-                float n3 = noise(N * 9.0 + vec3(uTime * 0.35, uTime * 0.20, 0.0));
-                float plasma = n1 * 0.50 + n2 * 0.30 + n3 * 0.20;
-                plasma = smoothstep(0.20, 0.80, plasma);
+                vec3 deepCol   = uAccent * 0.08;
+                vec3 bodyCol   = uAccent * 0.75;
+                vec3 brightCol = uAccent * 1.35;
 
-                // Breathing
-                float breath = 0.92 + 0.08 * sin(uTime * 2.2);
+                // 1. Base: dark at edges → body color toward camera
+                vec3 color = mix(deepCol, bodyCol, pow(facing, 1.5));
 
-                // Colors
-                vec3 accent  = uAccent;
-                vec3 deepCol = uAccent * 0.15;
-                vec3 hotCol  = vec3(1.0, 0.97, 0.92);
+                // 2. Plasma: mix (not add) so it never overwhelms
+                color = mix(color, brightCol, plasma * 0.75);
 
-                // Base: dark at edges → accent toward center
-                vec3 color = mix(deepCol, accent, pow(facing, 1.2));
+                // 3. Rim glow — added, but only at the silhouette
+                color += uAccent * rim * 1.7;
 
-                // Plasma adds accent-tinted brightness
-                color += accent * plasma * (0.55 + uEnergy * 0.75);
+                // 4. Tiny hot core — small, subtle
+                color += vec3(1.0, 0.98, 0.95) * core * 0.35;
 
-                // Hot core
-                color += hotCol * core * 2.2;
+                // 5. Breathing
+                float breath = 0.95 + 0.05 * sin(uTime * 2.0);
+                color *= breath * (0.9 + uEnergy * 0.25);
 
-                // Fresnel rim (bright energy edge)
-                color += accent * rim * 2.8;
+                // 6. Gentle tone map, keep hue
+                color = color / (1.0 + color * 0.55);
 
-                // Breathing + energy
-                color *= breath * (0.85 + uEnergy * 0.50);
-
-                // Tone map: keeps highlights hot, prevents washout
-                color = color / (color + vec3(0.85));
-
-                // Slight gamma lift
-                color = pow(color, vec3(0.85));
+                // 7. Slight gamma
+                color = pow(color, vec3(0.9));
 
                 gl_FragColor = vec4(color, 1.0);
             }
