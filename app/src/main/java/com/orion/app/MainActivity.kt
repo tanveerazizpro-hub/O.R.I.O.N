@@ -11,13 +11,16 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -31,8 +34,9 @@ import com.orion.app.ui.theme.accentFor
 /**
  * O.R.I.O.N. — Entry point.
  *
- * STEP 3: replaces the placeholder Canvas orb with a real OpenGL ES 3D orb
- * rendered on the GPU. State-driven accent color drives the shader.
+ * STEP 3.2:
+ *  - Real GLES plasma orb in the center.
+ *  - Compose-drawn radial glow behind it so the orb bleeds light into space.
  */
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,7 +56,6 @@ fun OrionHomeScreen() {
     val state = OrionState.IDLE
     val accent = accentFor(state)
 
-    // Convert Color → float RGB for the GLES shader
     val accentR = accent.red
     val accentG = accent.green
     val accentB = accent.blue
@@ -65,21 +68,45 @@ fun OrionHomeScreen() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
 
-            // --- GLES orb ---
-            AndroidView(
-                factory = { ctx ->
-                    CrimsonOrbView(ctx).apply {
-                        setAccent(accentR, accentG, accentB)
-                    }
-                },
-                modifier = Modifier.size(320.dp),
-                update = { view ->
-                    // Called whenever the state changes (future phases)
-                    view.setAccent(accentR, accentG, accentB)
-                }
-            )
+            // --- Orb + glow stack ---
+            Box(
+                modifier = Modifier.size(360.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Soft outer glow behind the orb (Compose layer)
+                Box(
+                    modifier = Modifier
+                        .size(360.dp)
+                        .clip(CircleShape)
+                        .background(
+                            Brush.radialGradient(
+                                colors = listOf(
+                                    accent.copy(alpha = 0.35f),
+                                    accent.copy(alpha = 0.12f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                        .blur(48.dp)
+                )
 
-            Spacer(Modifier.height(40.dp))
+                // The GLES orb on top
+                AndroidView(
+                    factory = { ctx ->
+                        CrimsonOrbView(ctx).apply {
+                            setAccent(accentR, accentG, accentB)
+                            setEnergy(0.5f)
+                        }
+                    },
+                    modifier = Modifier.size(300.dp),
+                    update = { view ->
+                        view.setAccent(accentR, accentG, accentB)
+                        view.setEnergy(0.5f)
+                    }
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
 
             Text(
                 text = "O.R.I.O.N.",
